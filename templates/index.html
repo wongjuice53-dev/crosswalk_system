@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>人行横道行人违规穿行识别系统</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:"Microsoft YaHei",sans-serif;margin:0;background:#eef1f6;color:#223}
+  header{background:linear-gradient(90deg,#16305e 0%,#1f6fd0 100%);color:#fff;padding:16px 32px;
+    display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+  header .title{font-size:21px;font-weight:600;letter-spacing:1px}
+  header .sub{font-size:12px;opacity:.75;margin-top:4px}
+  header nav a{color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);
+    border-radius:20px;padding:7px 18px;font-size:13px;text-decoration:none;margin-left:12px;transition:.2s}
+  header nav a:hover{background:rgba(255,255,255,.3)}
+
+  /* 统计看板 */
+  .stats{display:flex;gap:16px;padding:18px 32px 4px;flex-wrap:wrap}
+  .card{flex:1;min-width:170px;background:#fff;border-radius:12px;padding:16px 20px;
+    box-shadow:0 2px 10px rgba(30,60,120,.08);display:flex;align-items:center;gap:14px}
+  .card .label{font-size:13px;color:#7a8699}
+  .card .num{font-size:30px;font-weight:700;color:#16305e;line-height:1.1}
+  .card .extra{font-size:12px;color:#9aa5b5;margin-top:3px}
+  .dot{width:14px;height:14px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:-1px}
+
+  /* 信号灯样式 */
+  .lightbox{background:#2b2b2b;border-radius:10px;padding:8px 7px;display:flex;flex-direction:column;gap:6px}
+  .bulb{width:20px;height:20px;border-radius:50%;background:#555;transition:.3s}
+  .bulb.red.on{background:#e74c3c;box-shadow:0 0 10px 3px rgba(231,76,60,.7)}
+  .bulb.green.on{background:#2ecc71;box-shadow:0 0 10px 3px rgba(46,204,113,.7)}
+
+  .wrap{display:flex;gap:18px;padding:16px 32px 28px;align-items:flex-start}
+  .panel{background:#fff;border-radius:12px;padding:6px 22px 18px;flex:0 0 320px;box-shadow:0 2px 10px rgba(30,60,120,.08)}
+  .panel h3{font-size:15px;color:#16305e;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+  .panel h3 .no{display:inline-flex;width:22px;height:22px;border-radius:50%;background:#1f6fd0;color:#fff;
+    font-size:12px;align-items:center;justify-content:center;flex:none}
+  .main{flex:1;background:#fff;border-radius:12px;padding:18px 22px;box-shadow:0 2px 10px rgba(30,60,120,.08);min-width:0;overflow-x:auto}
+  .main h3{font-size:15px;color:#16305e;margin:4px 0 12px}
+  .main .sec{font-size:12px;color:#8a94a6;margin:14px 0 6px}
+
+  button{background:#1f6fd0;color:#fff;border:0;border-radius:6px;padding:8px 16px;cursor:pointer;
+    margin:4px 6px 4px 0;font-size:13px;transition:.15s;box-shadow:0 2px 4px rgba(31,111,208,.25)}
+  button:hover{filter:brightness(1.1);transform:translateY(-1px)}
+  button.gray{background:#8a94a6} button.red{background:#e74c3c} button.green{background:#27ae60}
+  input[type=file]{font-size:13px;width:100%}
+  select{padding:6px 8px;border:1px solid #ccd4e0;border-radius:6px;font-size:13px}
+  #stage{position:relative;background:#000;border-radius:8px;overflow:hidden}
+  #stage img{position:absolute;left:0;top:0;display:block}
+  #cv{position:absolute;left:0;top:0;cursor:crosshair;display:block}
+  #ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#8a94a6;font-size:14px;background:#1a2030;text-align:center}
+  .row{margin:10px 0;font-size:14px}
+  #hint{font-size:12px;color:#8a94a6;background:#f5f8ff;border-left:3px solid #1f6fd0;padding:8px 10px;border-radius:0 6px 6px 0;margin-top:10px;line-height:1.6}
+  #upmsg{font-size:12px;color:#27ae60}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="title">基于 OpenCV 的人行横道行人违规穿行识别系统</div>
+    <div class="sub">YOLOv8n 深度学习检测 · 多目标跟踪 · 信号灯识别 · 状态机违规判定</div>
+  </div>
+  <nav>
+    <a href="/records" target="_blank">违规记录</a>
+    <a href="/api/export" target="_blank">导出 CSV</a>
+  </nav>
+</header>
+
+<div class="stats">
+  <div class="card">
+    <div class="lightbox">
+      <div class="bulb red" id="bulbR"></div>
+      <div class="bulb green" id="bulbG"></div>
+    </div>
+    <div>
+      <div class="label">信号灯状态</div>
+      <div class="num" id="lightText" style="font-size:22px">未识别</div>
+    </div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">当前画面行人</div>
+      <div class="num" id="pedNum">0</div>
+      <div class="extra">正在跟踪的目标数</div>
+    </div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">斑马线区域内行人</div>
+      <div class="num" id="cwNum" style="color:#e67e22">0</div>
+      <div class="extra">结合信号灯判定闯红灯</div>
+    </div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">违规总数</div>
+      <div class="num" id="vioTotal" style="color:#e74c3c">0</div>
+      <div class="extra"><span class="dot" style="background:#e74c3c"></span>闯红灯 <b id="vioRed">0</b>
+        &nbsp;<span class="dot" style="background:#e67e22"></span>违规横穿 <b id="vioJay">0</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">运行状态</div>
+      <div class="num" id="runState" style="font-size:20px">空闲</div>
+      <div class="extra" id="runExtra">检测器 - · 0 FPS</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <h3><span class="no">1</span>上传视频</h3>
+    <input type="file" id="file" accept="video/*">
+    <button class="green" onclick="uploadVideo()">上传</button>
+    <span id="upmsg"></span>
+
+    <h3><span class="no">2</span>区域设置（在右侧首帧上操作）</h3>
+    <div class="row">绘制目标：
+      <select id="mode">
+        <option value="crosswalk">人行横道（多边形，必设）</option>
+        <option value="road">道路区域（多边形，判定横穿用）</option>
+        <option value="light">信号灯（矩形，框住红绿灯）</option>
+      </select>
+    </div>
+    <button onclick="finishPoly()">闭合多边形</button>
+    <button class="gray" onclick="clearRegion()">清除当前</button>
+    <button class="green" onclick="saveCfg()">保存区域</button>
+    <div id="hint">多边形：逐点单击，至少 3 个点后点“闭合多边形”；<br>信号灯：按住鼠标拖出矩形框。<br>设置完记得点“保存区域”。</div>
+
+    <h3><span class="no">3</span>检测设置</h3>
+    <div class="row">检测器：
+      <select id="detector">
+        <option value="auto">自动（优先 YOLOv8n）</option>
+        <option value="yolo">YOLOv8n（深度学习）</option>
+        <option value="hog">HOG+SVM（传统方法）</option>
+      </select>
+    </div>
+
+    <h3><span class="no">4</span>运行控制</h3>
+    <button class="green" onclick="startProc()">▶ 开始检测</button>
+    <button class="red" onclick="stopProc()">■ 停止</button>
+  </div>
+
+  <div class="main">
+    <h3>实时监控画面</h3>
+    <div id="stage">
+      <img id="stream" alt="">
+      <canvas id="cv"></canvas>
+      <div id="ph">请先在左侧上传视频<br>上传后直接在画面上圈画区域，开始检测后此处显示实时画面</div>
+    </div>
+    <div class="sec">未开始检测时显示视频首帧，直接在画面上圈画区域；开始检测后自动切换为实时检测画面，圈画的区域线保留显示。</div>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const stage = document.getElementById('stage'), stream = document.getElementById('stream'), ph = document.getElementById('ph');
+let regions = {crosswalk: [], road: [], light_rect: []};
+let cur = [], dragStart = null, vw = 0, vh = 0, running = false;
+
+function loadFrame(){
+  const probe = new Image();
+  probe.onload = () => {
+    vw = probe.naturalWidth; vh = probe.naturalHeight;
+    const s = Math.min(880 / vw, 600 / vh, 1);
+    const w = Math.round(vw * s), h = Math.round(vh * s);
+    stage.style.width = w + 'px'; stage.style.height = h + 'px';
+    cv.width = vw; cv.height = vh;   // 画布内部坐标 = 视频原始像素坐标
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    stream.style.width = w + 'px'; stream.style.height = h + 'px';
+    ph.style.display = 'none';
+    if (!running) stream.src = '/static/first_frame.jpg?t=' + Date.now();
+    draw();
+  };
+  probe.onerror = () => {
+    ph.style.display = 'flex';
+    stage.style.width = '640px'; stage.style.height = '360px';
+    cv.width = 640; cv.height = 360;
+  };
+  probe.src = '/static/first_frame.jpg?t=' + Date.now();
+}
+function toVideo(e){ const r = cv.getBoundingClientRect();
+  return [ (e.clientX - r.left) / r.width * vw, (e.clientY - r.top) / r.height * vh ]; }
+
+cv.onmousedown = e => {
+  const m = document.getElementById('mode').value;
+  if (m === 'light') { dragStart = toVideo(e); }
+  else { cur.push(toVideo(e)); draw(); }
+};
+cv.onmouseup = e => {
+  if (document.getElementById('mode').value === 'light' && dragStart) {
+    const p = toVideo(e);
+    const x = Math.min(dragStart[0], p[0]), y = Math.min(dragStart[1], p[1]);
+    regions.light_rect = [x, y, Math.abs(p[0]-dragStart[0]), Math.abs(p[1]-dragStart[1])];
+    dragStart = null; draw();
+  }
+};
+function finishPoly(){
+  const m = document.getElementById('mode').value;
+  if (m !== 'light' && cur.length >= 3) { regions[m] = cur; cur = []; draw(); }
+}
+function clearRegion(){
+  const m = document.getElementById('mode').value;
+  regions[m] = []; cur = []; draw();
+}
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const lw = Math.max(3, Math.round(vw / 240));
+  ctx.lineWidth = lw;
+  drawPoly(regions.crosswalk, 'rgba(255,180,0,.95)', '人行横道');
+  drawPoly(regions.road, 'rgba(0,180,255,.95)', '道路区域');
+  drawPoly(cur, 'rgba(255,0,0,.95)');
+  if (regions.light_rect.length === 4) {
+    const [x,y,w,h] = regions.light_rect;
+    ctx.strokeStyle = '#ff2020';
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = '#ff2020';
+    ctx.font = 'bold ' + Math.max(18, Math.round(vw / 32)) + 'px Microsoft YaHei';
+    ctx.fillText('信号灯', x, Math.max(24, y - 10));
+  }
+}
+function drawPoly(pts, color, label){
+  if (!pts || !pts.length) return;
+  ctx.strokeStyle = color; ctx.beginPath();
+  pts.forEach((p,i)=>{ i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]); });
+  if (pts.length>=3 && pts!==cur) ctx.closePath();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  const pr = Math.max(4, Math.round(vw / 180));
+  pts.forEach(p=>{ ctx.beginPath(); ctx.arc(p[0],p[1],pr,0,7); ctx.fill(); });
+  if (label && pts.length >= 3) {
+    const cx = pts.reduce((a,p)=>a+p[0],0)/pts.length, cy = pts.reduce((a,p)=>a+p[1],0)/pts.length;
+    ctx.font = 'bold ' + Math.max(18, Math.round(vw / 32)) + 'px Microsoft YaHei';
+    ctx.fillText(label, cx - 40, cy);
+  }
+}
+async function uploadVideo(){
+  const f = document.getElementById('file').files[0];
+  if (!f) { alert('请选择视频'); return; }
+  const fd = new FormData(); fd.append('video', f);
+  document.getElementById('upmsg').textContent = '上传中...';
+  const r = await (await fetch('/api/upload', {method:'POST', body:fd})).json();
+  document.getElementById('upmsg').textContent = r.msg;
+  if (r.ok) loadFrame();
+}
+async function saveCfg(){
+  const body = {crosswalk:regions.crosswalk, road:regions.road,
+    light_rect:regions.light_rect, detector:document.getElementById('detector').value};
+  const r = await (await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+  if (!r.ok) alert('保存失败');
+}
+async function startProc(){
+  await saveCfg();
+  const r = await (await fetch('/api/start',{method:'POST'})).json();
+  if (r.ok) { running = true; stream.src = '/video_feed'; }
+  else alert(r.msg);
+}
+async function stopProc(){ await fetch('/api/stop',{method:'POST'}); running = false; }
+
+const STATUS_CN = {idle:'空闲', running:'运行中', stopped:'已停止', finished:'播放完毕', error:'错误'};
+const LIGHT_CN = {red:'红灯', green:'绿灯', unknown:'未识别'};
+setInterval(async ()=>{
+  try{
+    const r = await (await fetch('/api/status')).json();
+    if (r.status === 'running' && !running) { running = true; stream.src = '/video_feed'; }
+    if (r.status !== 'running') running = false;
+    document.getElementById('runState').textContent = STATUS_CN[r.status] || r.status;
+    document.getElementById('runExtra').textContent = `检测器 ${r.detector} · ${r.fps} FPS`;
+    const lt = document.getElementById('lightText');
+    lt.textContent = LIGHT_CN[r.light] || '未识别';
+    lt.style.color = r.light==='red' ? '#e74c3c' : (r.light==='green' ? '#27ae60' : '#16305e');
+    document.getElementById('bulbR').className = 'bulb red' + (r.light==='red' ? ' on' : '');
+    document.getElementById('bulbG').className = 'bulb green' + (r.light==='green' ? ' on' : '');
+    document.getElementById('pedNum').textContent = r.ped;
+    document.getElementById('cwNum').textContent = r.in_crosswalk;
+    document.getElementById('vioTotal').textContent = r.vio.total;
+    document.getElementById('vioRed').textContent = r.vio.crossing_red;
+    document.getElementById('vioJay').textContent = r.vio.jaywalking;
+  }catch(e){}
+}, 1500);
+async function loadCfg(){
+  try{
+    const c = await (await fetch('/api/config')).json();
+    regions.crosswalk = c.crosswalk || [];
+    regions.road = c.road || [];
+    regions.light_rect = c.light_rect || [];
+    document.getElementById('detector').value = c.detector || 'auto';
+    draw();
+  }catch(e){}
+}
+loadFrame();
+loadCfg();
+</script>
+</body>
+</html>

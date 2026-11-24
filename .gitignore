@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# 运行产物
+violation.db
+violation_records.csv
+uploads/
+screenshots/
+server.log
+server.err
+
+# 模型权重（约6MB，可按需取消注释）
+# yolov8n.pt

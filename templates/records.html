@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>违规记录 - 人行横道行人违规穿行识别系统</title>
+<style>
+  body{font-family:"Microsoft YaHei",sans-serif;margin:0;background:#f2f4f8;color:#222}
+  header{background:#1f3c6e;color:#fff;padding:12px 24px;font-size:20px}
+  header a{color:#9fc1ff;font-size:14px;margin-left:16px;text-decoration:none}
+  .wrap{padding:16px 24px}
+  .bar{margin-bottom:12px}
+  .bar a{margin-right:12px;color:#1f6fd0;text-decoration:none}
+  table{border-collapse:collapse;width:100%;background:#fff}
+  th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px;text-align:center}
+  th{background:#e8eef7}
+  img{max-width:160px}
+  button{background:#c0392b;color:#fff;border:0;border-radius:4px;padding:6px 12px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>违规记录查询 <a href="/">返回主界面</a></header>
+<div class="wrap">
+  <div class="bar">
+    筛选：
+    <a href="/records">全部</a>
+    <a href="/records?type=crossing_red">闯红灯</a>
+    <a href="/records?type=jaywalking">违规横穿</a>
+    　|　<a href="/api/export">导出 CSV</a>
+    　<button onclick="if(confirm('确认清空全部记录？'))fetch('/api/clear',{method:'POST'}).then(()=>location.reload())">清空记录</button>
+  </div>
+  <table>
+    <tr><th>ID</th><th>时间</th><th>类型</th><th>轨迹ID</th><th>位置</th><th>信号灯</th><th>置信度</th><th>视频源</th><th>截图</th><th>备注</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td>{{ r.violation_time }}</td>
+      <td>{{ '闯红灯' if r.violation_type=='crossing_red' else '违规横穿' }}</td>
+      <td>{{ r.track_id }}</td>
+      <td>{{ r.position }}</td>
+      <td>{{ r.light_state }}</td>
+      <td>{{ r.confidence }}</td>
+      <td>{{ r.video_source }}</td>
+      <td>{% if r.screenshot_path %}<a href="/shot/{{ r.screenshot_path }}" target="_blank"><img src="/shot/{{ r.screenshot_path }}"></a>{% endif %}</td>
+      <td>{{ r.remark }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+</body>
+</html>

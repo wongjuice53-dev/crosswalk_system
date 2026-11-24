@@ -1,0 +1,50 @@
+人行横道行人违规穿行识别系统 - 使用说明
+==========================================
+
+一、环境准备（只需一次）
+1. 安装 Python 3.9 或更高版本（https://www.python.org/downloads/），
+   安装时务必勾选 "Add Python to PATH"。
+2. 双击 run.bat，会自动安装依赖（flask、opencv-python、numpy）并启动服务。
+
+二、运行
+1. 双击 run.bat，看到 "Running on http://..." 后，用浏览器打开：
+   http://127.0.0.1:5000
+2. 左侧"上传视频"：选择一段红绿灯路口视频（mp4/avi/mov 等）。
+3. 上传后右侧画布显示视频首帧：
+   - 绘制目标选"人行横道"，沿斑马线四角逐点单击，点"闭合多边形"；
+   - 选"信号灯"，在红绿灯位置按住拖出一个矩形；
+   - 选"道路区域"（可选），圈出车道范围，用于判定"违规横穿"；
+   - 点"保存区域"。
+4. 点"开始检测"：右侧出现实时画面，行人框 + ID + 轨迹线，
+   橙色框 = 正在穿越（疑似），红色框 = 已确认违规。
+5. 点顶部"违规记录"查看列表、截图，可导出 CSV、可按类型筛选。
+
+三、判定规则（与论文4.6节一致）
+- 闯红灯：红灯期间，行人进入人行横道区域并持续移动，连续 8 帧确认；
+- 违规横穿：在道路区域内、人行横道外持续穿行，连续 8 帧确认；
+- 同一轨迹只记录一次，截图自动存到 screenshots 目录。
+
+四、检测器
+- 默认自动模式：装了 ultralytics 就用 YOLOv8n（准），没装就用 OpenCV
+  内置 HOG+SVM（快、CPU 即可）。
+- 想用 YOLOv8n：python -m pip install ultralytics（首次运行会自动
+  下载 yolov8n.pt 权重，约 6MB，需联网）。
+
+五、目录说明
+  app.py        Flask 后端与路由
+  pipeline.py   视频处理流水线（预处理→检测→跟踪→判定→标记）
+  detector.py   YOLOv8n / HOG+SVM 双检测器
+  tracker.py    IoU + 中心距最近邻多目标跟踪
+  judge.py      四状态违规判定状态机
+  light.py      HSV 阈值信号灯识别
+  db.py         SQLite 存储（violation_records 表，同论文表3-1）
+  config.py     区域与参数配置
+  templates/    前端页面（主界面 index.html、记录页 records.html）
+  uploads/      上传的视频
+  screenshots/  违规截图
+  violation.db  违规记录数据库（首次运行自动生成）
+
+常见问题：
+- 浏览器打不开：确认 run.bat 窗口没关、防火墙放行 5000 端口；
+- 检测不到人：换 HOG 试试更清晰、行人更大的视频，或安装 YOLO；
+- 信号灯一直 unknown：矩形框画大一点，完整框住灯头。

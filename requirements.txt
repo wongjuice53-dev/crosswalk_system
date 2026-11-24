@@ -1,0 +1,5 @@
+flask>=2.0
+opencv-python>=4.5
+numpy>=1.21
+# 可选：安装后自动启用 YOLOv8n（体积较大，含 PyTorch，需联网）
+# ultralytics
