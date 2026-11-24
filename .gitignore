@@ -10,5 +10,9 @@ screenshots/
 server.log
 server.err
 
+# 论文文档（含个人信息，不入库）
+_thesis*.txt
+_thesis*.docx
+
 # 模型权重（约6MB，可按需取消注释）
 # yolov8n.pt
